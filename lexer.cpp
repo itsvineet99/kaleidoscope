@@ -1,7 +1,12 @@
 #include "lexer.h"
 
+#include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
+
+std::string IdentifierStr;
+double NumVal;
 
 // Return the next token from standard input.
 int getToken() {
@@ -53,9 +58,6 @@ int getToken() {
 
   if (LastChar == EOF)
     return tok_eof;
-
-  if (LastChar == ';')
-    return 67;
 
   // Otherwise, just return the character as its ascii value.
   int ThisChar = LastChar;

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 
 enum Token {
@@ -12,7 +14,7 @@ enum Token {
   tok_number = -5,
 };
 
-static std::string IdentifierStr;
-static double NumVal;
+extern std::string IdentifierStr;
+extern double NumVal;
 
 int getToken();

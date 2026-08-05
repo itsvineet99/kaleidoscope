@@ -1,5 +1,8 @@
+#pragma once
+
 #include <string>
 #include <vector>
+#include <memory>
 
 // Base class for all expression nodes.
 class ExprAST {
@@ -30,7 +33,7 @@ class BinaryExprAST : public ExprAST {
 
 public:
   BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS,
-                std::unique_ptr<ExprAST> RSH) 
+                std::unique_ptr<ExprAST> RHS) 
       : Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
 };
 
