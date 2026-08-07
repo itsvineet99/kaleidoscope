@@ -33,7 +33,7 @@ int getToken() {
     return tok_identifier;
   }
 
-  if (isdigit(LastChar)) {
+  if (isdigit(LastChar) || LastChar == '.') {
     std::string NumStr;
 
     do {
