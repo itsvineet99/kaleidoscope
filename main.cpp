@@ -2,10 +2,9 @@
 #include "parser.h"
 
 int main() {
+  InitializeCodegen();
   InitializeParser();
-  InitializeModule();
   MainLoop();
-  DumpModule();
 
   return 0;
 }

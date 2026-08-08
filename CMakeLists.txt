@@ -9,6 +9,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(LLVM REQUIRED CONFIG)
 
+message(STATUS "LLVM_SOURCE_DIR = ${LLVM_SOURCE_DIR}")
+message(STATUS "LLVM_INCLUDE_DIRS = ${LLVM_INCLUDE_DIRS}")
+
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_DIR = ${LLVM_DIR}")
 
@@ -19,9 +22,12 @@ add_executable(kaleidoscope
     codegen.cpp
 )
 
+set(LLVM_PROJECT_SOURCE_DIR "$ENV{HOME}/Developer/llvm-project")
+
 target_include_directories(kaleidoscope
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${LLVM_PROJECT_SOURCE_DIR}/llvm/examples/Kaleidoscope/include
     SYSTEM PRIVATE
         ${LLVM_INCLUDE_DIRS}
 )
@@ -33,7 +39,14 @@ target_compile_definitions(kaleidoscope
 
 llvm_map_components_to_libnames(LLVM_LIBS
     Core
+    ExecutionEngine
+    InstCombine
+    OrcJIT
+    RuntimeDyld
+    ScalarOpts
     Support
+    Target
+    native
 )
 
 target_link_libraries(kaleidoscope

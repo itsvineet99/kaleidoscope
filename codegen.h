@@ -1,4 +1,10 @@
 #pragma once
 
-void InitializeModule();
-void DumpModule();
+#include <memory>
+
+class PrototypeAST;
+
+void InitializeCodegen();
+void AddCurrentModuleToJIT();
+void AddExternPrototype(std::unique_ptr<PrototypeAST> Proto);
+void ExecuteTopLevelExpression();

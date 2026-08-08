@@ -5,4 +5,7 @@
 lexer
 kaleidoscope
 build/
+
+// cache and random files
 .cache/
+.vscode/

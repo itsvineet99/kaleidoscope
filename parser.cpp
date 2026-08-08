@@ -250,6 +250,7 @@ static void HandleDefinition() {
       fprintf(stderr, "Read function definition:");
       FnIR->print(llvm::errs());
       fprintf(stderr, "\n");
+      AddCurrentModuleToJIT();
     }
   } else {
     // Skip token for error recovery.
@@ -263,6 +264,7 @@ static void HandleExtern() {
       fprintf(stderr, "Read extern: ");
       FnIR->print(llvm::errs());
       fprintf(stderr, "\n");
+      AddExternPrototype(std::move(ProtoAST));
     }
   } else {
     // Skip token for error recovery.
@@ -273,14 +275,8 @@ static void HandleExtern() {
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
   if (auto FnAST = ParseTopLevelExpr()) {
-    if (auto *FnIR = FnAST->codegen()) {
-      fprintf(stderr, "Read top-level expression:");
-      FnIR->print(llvm::errs());
-      fprintf(stderr, "\n");
-
-      // Remove the anonymous expression.
-      FnIR->eraseFromParent();
-    }
+    if (FnAST->codegen())
+      ExecuteTopLevelExpression();
   } else {
     // Skip token for error recovery.
     getNextToken();
