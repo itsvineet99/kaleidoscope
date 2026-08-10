@@ -40,6 +40,18 @@ public:
   Value *codegen() override;
 };
 
+// UnaryExprAST - Expression class for a unary operator.
+class UnaryExprAST : public ExprAST {
+  char Opcode;
+  std::unique_ptr<ExprAST> Operand;
+
+public:
+  UnaryExprAST(char Opcode, std::unique_ptr<ExprAST> Operand)
+    : Opcode(Opcode), Operand(std::move(Operand)) {}
+
+  Value *codegen() override;
+};
+
 // Expression class for a binary operator.
 class BinaryExprAST : public ExprAST {
   char Op;
@@ -68,17 +80,31 @@ public:
 
 // This class represents the "prototype" for a function, which 
 // captures its name, and its argument names (thus implicitly the number
-// of arguments the function takes).
+// of arguments the function takes) as well as if it is an operator.
 class PrototypeAST {
   std::string Name;
   std::vector<std::string> Args;
+  bool IsOperator;
+  unsigned Precedence;  // Precedence if a binary op.
 
 public:
-  PrototypeAST(const std::string &Name, std::vector<std::string> Args)
-      : Name(Name), Args(std::move(Args)) {}
+  PrototypeAST(const std::string &Name, std::vector<std::string> Args,
+               bool IsOperator = false, unsigned Prec = 0)
+  : Name(Name), Args(std::move(Args)), IsOperator(IsOperator),
+    Precedence(Prec) {}
 
   Function *codegen();
   const std::string &getName() const { return Name; }
+
+  bool isUnaryOp() const { return IsOperator && Args.size() == 1; }
+  bool isBinaryOp() const { return IsOperator && Args.size() == 2; }
+
+  char getOperatorName() const {
+    assert(isUnaryOp() || isBinaryOp());
+    return Name[Name.size() - 1];
+  }
+
+  unsigned getBinaryPrecedence() const { return Precedence; }
 };
 
 // This class represents a function definition itself.

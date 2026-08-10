@@ -1,4 +1,5 @@
 #include "AST.h"
+#include "parser.h"
 #include "codegen.h"
 
 #include "KaleidoscopeJIT.h"
@@ -151,6 +152,18 @@ Value *VariableExprAST::codegen() {
   return V;
 }
 
+Value *UnaryExprAST::codegen() {
+  Value *OperandV = Operand->codegen();
+  if (!OperandV)
+    return nullptr;
+
+  Function *F = getFunction(std::string("unary") + Opcode);
+  if (!F)
+    return LogErrorV("Unknown unary operator");
+
+  return Builder->CreateCall(F, OperandV, "unop");
+}
+
 Value *BinaryExprAST::codegen() {
   Value *L = LHS->codegen();
   Value *R = RHS->codegen();
@@ -167,11 +180,21 @@ Value *BinaryExprAST::codegen() {
   case '<':
     L = Builder->CreateFCmpULT(L, R, "cmptmp");
     // Convert bool 0/1 to double 0.0 or 1.0
-    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext), "booltmp");
+    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext),
+                                "booltmp");
   default:
-    return LogErrorV("invalid binary operator");
+    break;
   }
+
+  // If it wasn't a builtin binary operator, it must be a user defined one. Emit
+  // a call to it.
+  Function *F = getFunction(std::string("binary") + Op);
+  assert(F && "binary operator not found!");
+
+  Value *Ops[2] = { L, R };
+  return Builder->CreateCall(F, Ops, "binop");
 }
+
 
 Value *CallExprAST::codegen() {
   // Look up the name in the global module table.
@@ -351,6 +374,10 @@ Function *FunctionAST::codegen() {
   Function *TheFunction = getFunction(P.getName());
   if (!TheFunction)
     return nullptr;
+
+  // If this is an operator, install it.
+  if (P.isBinaryOp())
+    BinopPrecedence[P.getOperatorName()] = P.getBinaryPrecedence();
 
   // Create a new basic block to start insertion into.
   BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
