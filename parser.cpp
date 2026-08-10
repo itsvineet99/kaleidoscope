@@ -6,11 +6,14 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <cctype>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 
@@ -65,6 +68,83 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
 //===---------------------------------------------===//
 
 static std::unique_ptr<ExprAST> ParseExpression();
+
+//===---------------------------------------------===//
+// parsing control flow statements 
+//===---------------------------------------------===//
+
+static std::unique_ptr<ExprAST> ParseIfExpr() {
+  getNextToken(); // eat 'if'
+
+  auto Cond = ParseExpression();
+  if (!Cond)
+    return nullptr;
+  
+  if (CurToken != tok_then)
+    return LogError("expected then");
+  getNextToken();
+
+  auto Then = ParseExpression();
+  if (!Then)
+    return nullptr;
+
+  if (CurToken != tok_else)
+    return LogError("expected else");
+
+  getNextToken();
+
+  auto Else = ParseExpression();
+  if (!Else)
+    return nullptr;
+
+  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then),
+                                     std::move(Else));
+}
+
+static std::unique_ptr<ExprAST> ParseForExpr() {
+  getNextToken();
+
+  if (CurToken != tok_identifier)
+    return LogError("expected identifier after for");
+
+  std::string IdName = IdentifierStr;
+  getNextToken();
+
+  if (CurToken != '=')
+    return LogError("expected '=' after for");
+  getNextToken();
+
+  auto Start = ParseExpression();
+  if (!Start)
+    return nullptr;
+  if (CurToken != ',')
+    return LogError("expected ',' after for start value");
+  getNextToken();
+
+  auto End = ParseExpression();
+  if (!End)
+    return nullptr;
+
+  std::unique_ptr<ExprAST> Step;
+  if (CurToken == ',') {
+    getNextToken();
+    Step = ParseExpression();
+    if (!Step)
+      return nullptr;
+  }
+
+  if (CurToken != tok_in)
+    return LogError("expected 'in' after for");
+  getNextToken();
+
+  auto Body = ParseExpression();
+  if (!Body)
+    return nullptr;
+
+  return std::make_unique<ForExprAST>(IdName, std::move(Start),
+                                       std::move(End), std::move(Step),
+                                       std::move(Body));
+}
 
 // numberexpr ::= number
 static std::unique_ptr<ExprAST> ParseNumberExpr() {
@@ -133,6 +213,10 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseNumberExpr();
   case '(':
     return ParseParenExpr();
+  case tok_if:
+    return ParseIfExpr(); 
+  case tok_for:
+    return  ParseForExpr();
   
   default:
     return LogError("unknown token when expecting an expression");
