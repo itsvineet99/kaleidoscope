@@ -162,6 +162,53 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
   return V;
 }
 
+static std::unique_ptr<ExprAST> ParseVarExpr() {
+  getNextToken(); // eat the var.
+
+  std::vector<std::pair<std::string, std::unique_ptr<ExprAST>>> VarNames;
+
+  // At least one variable name is required.
+  if (CurToken != tok_identifier)
+    return LogError("expected identifier after var");
+
+  while (true) {
+    std::string Name = IdentifierStr;
+    getNextToken(); // eat identifier.
+
+    // Read the optional initializer.
+    std::unique_ptr<ExprAST> Init = nullptr;
+    if (CurToken == '=') {
+      getNextToken(); // eat the '='.
+
+      Init = ParseExpression();
+      if (!Init)
+        return nullptr;
+    }
+
+    VarNames.push_back(std::make_pair(Name, std::move(Init)));
+
+    // End of var list, exit loop.
+    if (CurToken != ',')
+      break;
+    getNextToken(); // eat the ','.
+
+    if (CurToken != tok_identifier)
+      return LogError("expected identifier list after var");
+  }
+
+  // At this point, we have to have 'in'.
+  if (CurToken != tok_in)
+    return LogError("expected 'in' keyword after 'var'");
+  getNextToken(); // eat 'in'.
+
+  auto Body = ParseExpression();
+  if (!Body)
+    return nullptr;
+
+  return std::make_unique<VarExprAST>(std::move(VarNames), std::move(Body));
+}
+
+
 // identifierexpr
 //   ::= identifier
 //   ::= identifier '(' expression* ')'
@@ -201,6 +248,9 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 //   ::= identifierexpr
 //   ::= numberexpr
 //   ::= parenexpr
+//   ::= ifexpr
+//   ::= forexpr
+//   ::= varexpr
 static std::unique_ptr<ExprAST> ParsePrimary() {
   switch (CurToken) {
   case tok_identifier:
@@ -213,6 +263,8 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseIfExpr(); 
   case tok_for:
     return  ParseForExpr();
+  case tok_var:
+    return ParseVarExpr();
   
   default:
     return LogError("unknown token when expecting an expression");
@@ -432,6 +484,7 @@ static void HandleTopLevelExpression() {
 
 void InitializeParser() {
   // Install standard binary operators. 1 is lowest precedence.
+  BinopPrecedence['='] = 2;
   BinopPrecedence['<'] = 10;
   BinopPrecedence['+'] = 20;
   BinopPrecedence['-'] = 20;
