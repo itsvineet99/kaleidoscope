@@ -43,6 +43,8 @@ int getToken() {
       return tok_unary;
     if (IdentifierStr == "var")
       return tok_var;
+    if (IdentifierStr == "global")
+      return tok_global;
 
     return tok_identifier;
   }

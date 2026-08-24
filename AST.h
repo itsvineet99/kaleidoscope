@@ -3,6 +3,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Verifier.h"
 
@@ -159,4 +160,16 @@ public:
     : VarNames(std::move(VarNames)), Body(std::move(Body)) {}
 
   Value *codegen() override;
+};
+
+// GlobalExprAST - Top-level mutable global variable definition.
+class GlobalExprAST {
+  std::string Name;
+  double InitVal;
+
+public:
+  GlobalExprAST(std::string Name, double InitVal)
+      : Name(std::move(Name)), InitVal(InitVal) {}
+
+  GlobalVariable *codegen();
 };

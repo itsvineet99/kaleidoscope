@@ -54,6 +54,10 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
   LogError(Str);
   return nullptr;
 }
+std::unique_ptr<GlobalExprAST> LogErrorG(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
 
 //===---------------------------------------------===//
 // Parsing Fucntions (soul of this program?)
@@ -433,6 +437,29 @@ static std::unique_ptr<PrototypeAST> ParseExtern() {
   return ParsePrototype();
 }
 
+// global ::= 'global' identifier '=' number
+static std::unique_ptr<GlobalExprAST> ParseGlobal() {
+  getNextToken(); // eat 'global'
+
+  if (CurToken != tok_identifier)
+    return LogErrorG("expected identifier after global");
+
+  std::string Name = IdentifierStr;
+  getNextToken(); // eat identifier.
+
+  if (CurToken != '=')
+    return LogErrorG("expected '=' after global identifier");
+  getNextToken(); // eat '='.
+
+  if (CurToken != tok_number)
+    return LogErrorG("expected numeric initializer for global");
+
+  double InitVal = NumVal;
+  getNextToken(); // eat number.
+
+  return std::make_unique<GlobalExprAST>(std::move(Name), InitVal);
+}
+
 //===---------------------------------------------===//
 // Top Level Parsing 
 //===---------------------------------------------===//
@@ -458,6 +485,20 @@ static void HandleExtern() {
       FnIR->print(llvm::errs());
       fprintf(stderr, "\n");
       AddExternPrototype(std::move(ProtoAST));
+    }
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+static void HandleGlobal() {
+  if (auto GlobalAST = ParseGlobal()) {
+    if (auto *GlobalIR = GlobalAST->codegen()) {
+      fprintf(stderr, "Read global: ");
+      GlobalIR->print(llvm::errs());
+      fprintf(stderr, "\n");
+      AddCurrentModuleToJIT();
     }
   } else {
     // Skip token for error recovery.
@@ -509,6 +550,9 @@ void MainLoop() {
         break;
       case tok_extern:
         HandleExtern();
+        break;
+      case tok_global:
+        HandleGlobal();
         break;
       default:
         HandleTopLevelExpression();

@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <set>
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -40,7 +41,8 @@ using namespace llvm::orc;
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
-static std::map<std::string, AllocaInst*> NamedValues;
+static std::map<std::string, Value *> NamedValues;
+static std::set<std::string> GlobalNames;
 static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 static std::unique_ptr<FunctionPassManager> TheFPM;
 static std::unique_ptr<LoopAnalysisManager> TheLAM;
@@ -154,18 +156,31 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
   return TmB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr, VarName);
 }
 
+static Value *getVariableAddress(const std::string &Name) {
+  auto Local = NamedValues.find(Name);
+  if (Local != NamedValues.end() && Local->second)
+    return Local->second;
+
+  if (!GlobalNames.count(Name))
+    return nullptr;
+
+  if (auto *GV = TheModule->getNamedGlobal(Name))
+    return GV;
+
+  return new GlobalVariable(*TheModule, Type::getDoubleTy(*TheContext), false,
+                            GlobalValue::ExternalLinkage, nullptr, Name);
+}
+
 Value *NumberExprAST::codegen() {
   return ConstantFP::get(*TheContext, APFloat(Val));
 }
 
 Value *VariableExprAST::codegen() {
-  // Look this variable up in the function.
-  AllocaInst *A = NamedValues[Name];
-  if (!A)
+  Value *Ptr = getVariableAddress(Name);
+  if (!Ptr)
     return LogErrorV("Unknown variable name");
 
-  // Load the value.
-  return Builder->CreateLoad(A->getAllocatedType(), A, Name.c_str());
+  return Builder->CreateLoad(Type::getDoubleTy(*TheContext), Ptr, Name.c_str());
 }
 
 Value *UnaryExprAST::codegen() {
@@ -184,7 +199,7 @@ Value *BinaryExprAST::codegen() {
   // Special case '=' because we don't want to emit the LHS as an expression.
   if (Op == '=') {
     // Assignment requires the LHS to be an identifier.
-    VariableExprAST *LHSE = static_cast<VariableExprAST *>(LHS.get());
+    VariableExprAST *LHSE = dynamic_cast<VariableExprAST *>(LHS.get());
     if (!LHSE)
       return LogErrorV("destination of '=' must be a variable");
     // Codegen the RHS.
@@ -192,12 +207,11 @@ Value *BinaryExprAST::codegen() {
     if (!Val)
       return nullptr;
 
-    // Look up the name.
-    AllocaInst *Alloca = NamedValues[LHSE->getName()];
-    if (!Alloca)
+    Value *Ptr = getVariableAddress(LHSE->getName());
+    if (!Ptr)
       return LogErrorV("Unknown variable name");
 
-    Builder->CreateStore(Val, Alloca);
+    Builder->CreateStore(Val, Ptr);
     return Val;
   }
 
@@ -329,7 +343,7 @@ Value *ForExprAST::codegen() {
 
   // Within the loop, the variable is defined equal to the PHI node.  If it
   // shadows an existing variable, we have to restore it, so save it now.
-  AllocaInst *OldVal = NamedValues[VarName];
+  Value *OldVal = NamedValues[VarName];
   NamedValues[VarName] = Alloca;
 
   // Emit the body of the loop.  This, like any other expr, can change the
@@ -386,7 +400,7 @@ Value *ForExprAST::codegen() {
 }
 
 Value *VarExprAST::codegen() {
-  std::vector<AllocaInst *> OldBindings;
+  std::vector<Value *> OldBindings;
 
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
@@ -426,11 +440,30 @@ Value *VarExprAST::codegen() {
     return nullptr;
 
   // Pop all our variables from scope.
-  for (unsigned i = 0, e = VarNames.size(); i != e; ++i)
-    NamedValues[VarNames[i].first] = OldBindings[i];
+  for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
+    if (OldBindings[i])
+      NamedValues[VarNames[i].first] = OldBindings[i];
+    else
+      NamedValues.erase(VarNames[i].first);
+  }
 
   // Return the body computation.
   return BodyVal;
+}
+
+GlobalVariable *GlobalExprAST::codegen() {
+  if (GlobalNames.count(Name)) {
+    LogError("redefinition of global variable");
+    return nullptr;
+  }
+
+  auto *Init = ConstantFP::get(*TheContext, APFloat(InitVal));
+  auto *GV = new GlobalVariable(*TheModule, Type::getDoubleTy(*TheContext),
+                                false, GlobalValue::ExternalLinkage, Init,
+                                Name);
+
+  GlobalNames.insert(Name);
+  return GV;
 }
 
 Function *PrototypeAST::codegen() {
