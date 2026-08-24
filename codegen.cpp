@@ -34,6 +34,8 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -55,6 +57,16 @@ static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 static ExitOnError ExitOnErr;
 
 std::unique_ptr<ExprAST> LogError(const char *Str);
+
+static void AddBuiltinPrototype(const std::string &Name,
+                                std::vector<std::string> Args) {
+  FunctionProtos[Name] =
+      std::make_unique<PrototypeAST>(Name, std::move(Args));
+}
+
+static void AddBuiltinPrototypes() {
+  AddBuiltinPrototype("print", {"x"});
+}
 
 static void InitializeModuleAndManagers() {
   // Open a new context and module.
@@ -101,6 +113,7 @@ void InitializeCodegen() {
   InitializeNativeTargetAsmParser();
 
   TheJIT = ExitOnErr(KaleidoscopeJIT::Create());
+  AddBuiltinPrototypes();
   InitializeModuleAndManagers();
 }
 
@@ -548,4 +561,9 @@ extern "C" DLLEXPORT double putchard(double X) {
 extern "C" DLLEXPORT double printd(double X) {
   fprintf(stderr, "%f\n", X);
   return 0;
+}
+
+extern "C" DLLEXPORT double print(double X) {
+  fprintf(stderr, "%f\n", X);
+  return X;
 }
